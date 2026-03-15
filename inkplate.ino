@@ -17,6 +17,9 @@ void setup() {
 	Serial.begin(115200);
 	//====== initialise inkplate ======
 	inkplate.begin();
+	//wake battery monitor up
+	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
+	inkplate.battery.begin();
 	//====== initialise wifi ======
 	wifi_connect();
 }
@@ -37,8 +40,6 @@ void loop() {
 	}
 	//====== display batter info ======
 	//wake battery
-	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
-	inkplate.battery.begin();
 	//get charge
 	int percentage_charge = inkplate.battery.soc();
 	//get power draw
@@ -56,6 +57,7 @@ void loop() {
 		inkplate.setTextSize(4);
 		inkplate.print("low battery");
 		inkplate.display();
+		delay(10000);
 		esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 		esp_deep_sleep_start();
 	}
@@ -67,8 +69,12 @@ void loop() {
 	esp_sleep_enable_ext0_wakeup(GPIO_NUM_36,LOW); //or wake button pressed
 	//save power
 	WiFi.disconnect();
+	inkplate.sleepPeripheral(INKPLATE_FUEL_GAUGE);
 	esp_light_sleep_start();
 	//====== wakeup ======
+	//bring up battery monitor
+	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
+	inkplate.battery.begin();
 	//bring wifi back up after light sleep exit
 	wifi_connect();
 	//why did we wake?
