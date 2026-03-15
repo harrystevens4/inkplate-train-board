@@ -9,6 +9,7 @@
 
 int display_national_rail_departures(const char *crs_code, const char *title);
 int wifi_connect();
+int display_selection_menu(const char **options, size_t option_count);
 
 Inkplate inkplate(INKPLATE_1BIT);
 
@@ -17,6 +18,7 @@ void setup() {
 	Serial.begin(115200);
 	//====== initialise inkplate ======
 	inkplate.begin();
+	inkplate.tsInit(true);
 	//wake battery monitor up
 	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
 	inkplate.battery.begin();
@@ -72,19 +74,21 @@ void loop() {
 	inkplate.sleepPeripheral(INKPLATE_FUEL_GAUGE);
 	esp_light_sleep_start();
 	//====== wakeup ======
+	//why did we wake?
+	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+	Serial.println("woke up from source "+String(wakeup_cause));
+	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0){
+		//====== prompt to change departures menu ======
+		const char *selections[] = {"Catford Bridge","Catford","Honor Oak Park","284"};
+		selected_menu = display_selection_menu(selections,sizeof(selections)/sizeof(char *));
+	}
+	//====== bring modules back online ======
+	//less interference with touchscreen if they are off while selecting
 	//bring up battery monitor
 	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
 	inkplate.battery.begin();
 	//bring wifi back up after light sleep exit
 	wifi_connect();
-	//why did we wake?
-	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
-	Serial.println("woke up from source "+String(wakeup_cause));
-	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0){
-		Serial.print("changing menu ("+String(selected_menu)+" -> ");
-		selected_menu = (selected_menu+1) % 3;
-		Serial.println(String(selected_menu)+" )");
-	}
 }
 
 int display_national_rail_departures(const char *crs_code, const char *title){
@@ -139,6 +143,46 @@ int display_national_rail_departures(const char *crs_code, const char *title){
 		return -1;
 	}
 	return 0;
+}
+
+int display_selection_menu(const char **options, size_t option_count){
+	//====== initialise everything ======
+	Serial.println("displaying selection menu");
+	inkplate.setTextSize(4);
+	inkplate.clearDisplay();
+	//constants
+	const int button_width = 460;
+	const int button_height = 120;
+	//====== render option buttons ======
+	const int options_per_page = 4;
+	int page = 0;
+	for (int i = 0; i < option_count; i++){
+		int x = 40;
+		int y = 50+(i*(button_height+10));
+		inkplate.drawRect(x,y,button_width,button_height,BLACK);
+		inkplate.setCursor(x+10,y+40);
+		inkplate.print(options[i]);
+	}
+	inkplate.display();
+	//====== option buttons touch ======
+	while (1){
+		for (int i = 0; i < option_count; i++){
+			int x = 40;
+			int y = 50+(i*(button_height+10));
+			if (inkplate.touchInArea(x,y+15,button_width,button_height-30)){
+				Serial.println("user selected: "+String(options[i])+" option "+String(i));
+				//convey to the user that they selected the option by inverting colours on the selected option
+				inkplate.fillRect(x,y,button_width,button_height,BLACK);
+				inkplate.setCursor(x+10,y+40);
+				inkplate.setTextColor(WHITE);
+				inkplate.print(options[i]);
+				inkplate.partialUpdate();
+				inkplate.setTextColor(BLACK);
+				return i;
+			}
+			delay(100);
+		}
+	}
 }
 
 int wifi_connect(){
