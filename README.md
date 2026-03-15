@@ -1,6 +1,8 @@
 
 # About
 
+![Catford Bridge Departures rendered on Inkplate 4TEMPERA](/images/catford-bridge-departures.jpg)
+
 This is a project to create a train board like the ones at stations. It uses the rail data marketplace live departure board API to fetch the train times from national rail stations [API link](https://raildata.org.uk/dashboard/dataProduct/P-d81d6eaf-8060-4467-a339-1c833e50cbbe/overview).
 
 # How to use it yourself
