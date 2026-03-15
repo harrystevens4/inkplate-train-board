@@ -8,6 +8,7 @@
 #include "keys.h"
 
 int display_national_rail_departures(const char *crs_code, const char *title);
+int wifi_connect();
 
 Inkplate inkplate(INKPLATE_1BIT);
 
@@ -16,28 +17,68 @@ void setup() {
 	Serial.begin(115200);
 	//====== initialise inkplate ======
 	inkplate.begin();
-	inkplate.display();
 	//====== initialise wifi ======
-	WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
-	inkplate.clearDisplay();
-	inkplate.setTextColor(BLACK);
-	inkplate.setCursor(10,150);
-	inkplate.setTextSize(5);
-	inkplate.print("Connecting to wifi...");
-	inkplate.display();
-	delay(2000);
-	while (WiFi.status() != WL_CONNECTED){
-	}
-	inkplate.clearDisplay();
-	inkplate.setCursor(50,150);
-	inkplate.print("Wifi connected.");
-	inkplate.display();
-	delay(1000);
+	wifi_connect();
 }
 
 void loop() { 
-	display_national_rail_departures("CFB","Cftd Brdg");
-	delay(60000); //60s
+	//====== display menus ======
+	static int selected_menu = 0;
+	switch (selected_menu){
+	case 0:
+		display_national_rail_departures("CFB","Cftd Brdg");
+		break;
+	case 1:
+		display_national_rail_departures("CTF","Catford");
+		break;
+	case 2:
+		display_national_rail_departures("HPA","Hnr Oak Pk");
+		break;
+	}
+	//====== display batter info ======
+	//wake battery
+	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
+	inkplate.battery.begin();
+	//get charge
+	int percentage_charge = inkplate.battery.soc();
+	//get power draw
+	int current_draw = inkplate.battery.current();
+	//display
+	inkplate.setTextColor(BLACK);
+	inkplate.setCursor(30,530);
+	inkplate.setTextSize(3);
+	inkplate.print("Bat: "+String(percentage_charge)+"%");
+	//power off indefinitely if battery goes below 5%
+	if (percentage_charge < 5 && current_draw > 0){
+		inkplate.clearDisplay();
+		inkplate.setTextColor(BLACK);
+		inkplate.setCursor(50,50);
+		inkplate.setTextSize(4);
+		inkplate.print("low battery");
+		inkplate.display();
+		esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+		esp_deep_sleep_start();
+	}
+	//====== update screen ======
+	inkplate.display();
+	//====== sleep ======
+	Serial.println("sleeping...");
+	esp_sleep_enable_timer_wakeup(60000000); //60s timer
+	esp_sleep_enable_ext0_wakeup(GPIO_NUM_36,LOW); //or wake button pressed
+	//save power
+	WiFi.disconnect();
+	esp_light_sleep_start();
+	//====== wakeup ======
+	//bring wifi back up after light sleep exit
+	wifi_connect();
+	//why did we wake?
+	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+	Serial.println("woke up from source "+String(wakeup_cause));
+	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0){
+		Serial.print("changing menu ("+String(selected_menu)+" -> ");
+		selected_menu = (selected_menu+1) % 3;
+		Serial.println(String(selected_menu)+" )");
+	}
 }
 
 int display_national_rail_departures(const char *crs_code, const char *title){
@@ -85,12 +126,18 @@ int display_national_rail_departures(const char *crs_code, const char *title){
 				i++;
 			}
 			//====== display ======
-			inkplate.display();
 			Serial.println("departures displayed");
 		}
 	}else {
 		Serial.println("could not connect");
 		return -1;
+	}
+	return 0;
+}
+
+int wifi_connect(){
+	WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
+	while (WiFi.status() != WL_CONNECTED){
 	}
 	return 0;
 }
