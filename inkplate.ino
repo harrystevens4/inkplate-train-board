@@ -40,55 +40,20 @@ void loop() {
 		display_national_rail_departures("HPA","Hnr Oak Pk");
 		break;
 	}
-	//====== display batter info ======
-	//wake battery
-	//get charge
-	int percentage_charge = inkplate.battery.soc();
-	//get power draw
-	int current_draw = inkplate.battery.current();
-	//display
-	inkplate.setTextColor(BLACK);
-	inkplate.setCursor(30,530);
-	inkplate.setTextSize(3);
-	inkplate.print("Bat: "+String(percentage_charge)+"%");
-	//power off indefinitely if battery goes below 5%
-	if (percentage_charge < 5 && current_draw > 0){
-		inkplate.clearDisplay();
-		inkplate.setTextColor(BLACK);
-		inkplate.setCursor(50,50);
-		inkplate.setTextSize(4);
-		inkplate.print("low battery");
-		inkplate.display();
-		delay(10000);
-		esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-		esp_deep_sleep_start();
-	}
 	//====== update screen ======
 	inkplate.display();
-	//====== sleep ======
-	Serial.println("sleeping...");
-	esp_sleep_enable_timer_wakeup(60000000); //60s timer
-	esp_sleep_enable_ext0_wakeup(GPIO_NUM_36,LOW); //or wake button pressed
-	//save power
-	WiFi.disconnect();
-	inkplate.sleepPeripheral(INKPLATE_FUEL_GAUGE);
-	esp_light_sleep_start();
-	//====== wakeup ======
-	//why did we wake?
-	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
-	Serial.println("woke up from source "+String(wakeup_cause));
-	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0){
-		//====== prompt to change departures menu ======
-		const char *selections[] = {"Catford Bridge","Catford","Honor Oak Park","284"};
-		selected_menu = display_selection_menu(selections,sizeof(selections)/sizeof(char *));
+	//====== wait for user input ======
+	const time_t time_between_updates_ms = 60000;
+	time_t time_waited_ms = 0;
+	while (time_waited_ms < time_between_updates_ms){
+		delay(100);
+		time_waited_ms += 100;
+		uint16_t x[2], y[2];
+		if (inkplate.tsGetData(x,y) > 0){
+			selected_menu = (selected_menu+1) % 3;
+			break;
+		}
 	}
-	//====== bring modules back online ======
-	//less interference with touchscreen if they are off while selecting
-	//bring up battery monitor
-	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
-	inkplate.battery.begin();
-	//bring wifi back up after light sleep exit
-	wifi_connect();
 }
 
 int display_national_rail_departures(const char *crs_code, const char *title){
@@ -102,7 +67,7 @@ int display_national_rail_departures(const char *crs_code, const char *title){
 		if (http_response_code == 200){
 			//====== deserialise =====
 			String response = http.getString();
-			Serial.println(response);
+			//Serial.println(response);
 			JsonDocument json_response;
 			deserializeJson(json_response, response);
 			//====== display header ======
