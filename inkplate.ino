@@ -11,6 +11,7 @@ int display_national_rail_departures(const char *crs_code, const char *title);
 int wifi_connect();
 int display_selection_menu(const char **options, size_t option_count);
 void display_title(const char *title);
+int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *line_id_filter = NULL);
 
 Inkplate inkplate(INKPLATE_1BIT);
 
@@ -29,11 +30,12 @@ void setup() {
 
 void loop() { 
 	//====== initialisation ======
-	static char *titles[] = {
+	const char *titles[] = {
 		"Catford Bridge",
 		"Catford",
 		"Hnr Oak Park",
-		"284 Arrivals"
+		"284 Arrivals",
+		"185 arrivals"
 	};
 	static int selected_menu = -1;
 	if (selected_menu < 0){
@@ -41,6 +43,12 @@ void loop() {
 		selected_menu = 0;
 		display_title(titles[selected_menu]);
 	}
+	//ravensbourne park crescent and bourneville road (same stop in opposite directions)
+	const char *stops_284[] = {"490011434Z","490000365Z"};
+	const size_t stop_count_284 = sizeof(stops_284)/sizeof(const char *);
+	//blythe vale
+	const char *stops_185[] = {"490004124E","490004124W"};
+	const size_t stop_count_185 = sizeof(stops_185)/sizeof(const char *);
 	//====== display corresponding menu ======
 	switch (selected_menu){
 	case 0:
@@ -53,10 +61,11 @@ void loop() {
 		display_national_rail_departures("HPA");
 		break;
 	case 3:
-		//ravensbourne park crescent and bourneville road (same stop in opposite directions)
-		const char *stops[] = {"490011434Z","490000365Z"};
-		size_t stop_count = sizeof(stops)/sizeof(const char *);
-		display_tfl_arrivals(stops,stop_count);
+		display_tfl_arrivals(stops_284,stop_count_284);
+		break;
+	case 4:
+		//multiple busses come here but we only care about 185
+		display_tfl_arrivals(stops_185,stop_count_185,"185");
 		break;
 	}
 	//====== wait for user input ======
@@ -64,12 +73,13 @@ void loop() {
 	const time_t wait_time = 50; //user input poll interval (ms)
 	time_t time_waited_ms = 0;
 	int title_rendered = 0;
+	Serial.println("pausing for "+String(time_between_updates_ms)+"ms ...");
 	while (time_waited_ms < time_between_updates_ms){
-		delay(wait_time);
+		delay((unsigned long)wait_time);
 		time_waited_ms += wait_time;
 		uint16_t x[2], y[2];
 		if (inkplate.tsGetData(x,y) > 0){
-			selected_menu = (selected_menu+1) % 4;
+			selected_menu = (selected_menu+1) % (sizeof(titles)/sizeof(const char *));
 			display_title(titles[selected_menu]);
 			//give user grace time to keep navigating to a new menu
 			time_waited_ms = time_between_updates_ms - 500; //0.5s
@@ -77,7 +87,6 @@ void loop() {
 		}
 	}
 	//====== render the title ======
-	Serial.println("displaying title...");
 	//if user has scrolled through menus no need to redisplay the title
 	if (!title_rendered) display_title(titles[selected_menu]);
 }
@@ -182,7 +191,7 @@ int display_selection_menu(const char **options, size_t option_count){
 	}
 }
 
-int display_tfl_arrivals(const char **stop_ids, size_t stop_count){
+int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *line_id_filter){
 	//====== for each stop point fetch the stops ======
 	HTTPClient http;
 	int display_line = 0;
@@ -206,6 +215,12 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count){
 				}
 				Serial.println("arrivals fetched successfully");
 				for (JsonVariant arrival : arrivals.as<JsonArray>()){
+					//filter by line id if required
+					if (line_id_filter != NULL){
+						String line_id = arrival["lineId"] | "";
+						if (String(line_id_filter) == line_id) continue;
+					}
+					//display arrival
 					struct tm expected_arrival_tm = {0};
 					strptime(arrival["expectedArrival"] | "","%FT%TZ",& expected_arrival_tm);
 					char expected_arrival[25] = "";
