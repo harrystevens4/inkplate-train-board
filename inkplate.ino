@@ -21,10 +21,10 @@ void setup() {
 	Serial.begin(115200);
 	//====== initialise inkplate ======
 	inkplate.begin();
-	inkplate.tsInit(true);
 	//wake battery monitor up
-	inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
-	inkplate.battery.begin();
+	//inkplate.wakePeripheral(INKPLATE_FUEL_GAUGE);
+	//inkplate.battery.begin();
+	inkplate.tsInit(true);
 	//====== initialise wifi ======
 	wifi_connect();
 	//====== set the timezone ======
@@ -81,8 +81,10 @@ void loop() {
 	while (time_waited_ms < time_between_updates_ms){
 		delay((unsigned long)wait_time);
 		time_waited_ms += wait_time;
-		uint16_t x[2], y[2];
-		if (inkplate.tsGetData(x,y) > 0){
+		//i had to change this because it was casuing a division by zero error for some reason
+		//uint16_t x[2] = {0}, y[2] = {0};
+		//if (inkplate.tsGetData(x,y) > 0){
+		if (inkplate.touchInArea(0,0,400,400) > 0){
 			selected_menu = (selected_menu+1) % (sizeof(titles)/sizeof(const char *));
 			display_title(titles[selected_menu]);
 			//give user grace time to keep navigating to a new menu
@@ -211,13 +213,23 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *l
 				//Serial.println(response);
 				JsonDocument arrivals;
 				deserializeJson(arrivals, response);
-				//====== display each train time ======
+				//====== decode each train time ======
 				inkplate.setTextSize(3);
 				if (arrivals.isNull()){
 					Serial.println("no services provided");
 					continue;
 				}
 				Serial.println("arrivals fetched successfully");
+				//store to sort later
+				size_t arrivals_len = 0;
+				const size_t max_arrivals = 5;
+				//create a list
+				struct arrival_array_item {
+					String destination;
+					time_t eta;
+				};
+				struct arrival_array_item arrivals_array[max_arrivals];
+				//decode each one
 				for (JsonVariant arrival : arrivals.as<JsonArray>()){
 					//filter by line id if required
 					if (line_id_filter != NULL){
@@ -227,12 +239,8 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *l
 					//read arrival
 					struct tm expected_arrival_tm = {0};
 					strptime(arrival["expectedArrival"] | "","%FT%TZ",& expected_arrival_tm);
-					//converting timezone
+					//converting to timestamp
 					time_t expected_arrival_timestamp = mktime(&expected_arrival_tm);
-					struct tm eta_correct_tz = {0};
-					localtime_r(&expected_arrival_timestamp,&eta_correct_tz);
-					char expected_arrival[25] = "";
-					strftime(expected_arrival,sizeof(expected_arrival)/sizeof(char),"%H:%M",&eta_correct_tz);
 					String destination = arrival["destinationName"];
 					//trim destinationName length
 					if (destination.length() >= 23){
@@ -241,9 +249,43 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *l
 						destination[22] = '.';
 						destination = destination.substring(0,23);
 					}
-					//display
+					//add to the list
+					arrivals_len++;
+					arrivals_array[arrivals_len-1].eta = expected_arrival_timestamp;
+					arrivals_array[arrivals_len-1].destination = destination;
+					if (arrivals_len >= max_arrivals) break;
+				}
+				//====== sort by eta ======
+				Serial.println("sorting arrivals...");
+				//bubble sort (idk how to do quicksort in place)
+				int swaps = 0;
+				for (;;){
+					swaps = 0;
+					for (size_t i = 0; i < arrivals_len-1; i++){
+						if (arrivals_array[i].eta > arrivals_array[i+1].eta){
+							struct arrival_array_item temp;
+							temp = arrivals_array[i];
+							arrivals_array[i] = arrivals_array[i+1];
+							arrivals_array[i+1] = temp;
+							//memmove(&temp,&arrivals_array[i],sizeof(struct arrival_array_item));
+							//memmove(&arrivals_array[i],&arrivals_array[i+1],sizeof(struct arrival_array_item));
+							//memmove(&arrivals_array[i+1],&temp,sizeof(struct arrival_array_item));
+							swaps = 1;
+						}
+					}
+					if (!swaps) break;
+				}
+				//====== display ======
+				Serial.println("displaying arrivals...");
+				for (size_t i = 0; i < arrivals_len; i++){
+					//convert time to human readable
+					struct tm eta_tm = {0};
+					localtime_r(&arrivals_array[i].eta,&eta_tm);
+					char expected_arrival[25] = {0};
+					strftime(expected_arrival,sizeof(expected_arrival)/sizeof(char),"%H:%M",&eta_tm);
+					//print to display
 					inkplate.setCursor(40,130+(35*display_line));
-					inkplate.print(destination);
+					inkplate.print(arrivals_array[i].destination);
 					inkplate.setCursor(475,130+(35*display_line));
 					inkplate.print(expected_arrival);
 					display_line++;
