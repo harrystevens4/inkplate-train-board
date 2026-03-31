@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <time.h>
 //defines WIFI_SSID and WIFI_PASSWORD
 #include "wifi_password.h"
 //has the api keys
@@ -27,7 +28,7 @@ void setup() {
 	//====== initialise wifi ======
 	wifi_connect();
 	//====== set the timezone ======
-	setenv("TZ","UK/London",1);
+	setenv("TZ","GMT0BST,M3.5.0/1,M10.5.0",1);
 	tzset();
 }
 
@@ -226,8 +227,12 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *l
 					//read arrival
 					struct tm expected_arrival_tm = {0};
 					strptime(arrival["expectedArrival"] | "","%FT%TZ",& expected_arrival_tm);
+					//converting timezone
+					time_t expected_arrival_timestamp = mktime(&expected_arrival_tm);
+					struct tm eta_correct_tz = {0};
+					localtime_r(&expected_arrival_timestamp,&eta_correct_tz);
 					char expected_arrival[25] = "";
-					strftime(expected_arrival,sizeof(expected_arrival)/sizeof(char),"%H:%M",&expected_arrival_tm);
+					strftime(expected_arrival,sizeof(expected_arrival)/sizeof(char),"%H:%M",&eta_correct_tz);
 					String destination = arrival["destinationName"];
 					//trim destinationName length
 					if (destination.length() >= 23){
