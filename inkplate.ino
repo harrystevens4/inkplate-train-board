@@ -26,6 +26,9 @@ void setup() {
 	inkplate.battery.begin();
 	//====== initialise wifi ======
 	wifi_connect();
+	//====== set the timezone ======
+	setenv("TZ","UK/London",1);
+	tzset();
 }
 
 void loop() { 
