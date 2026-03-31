@@ -223,12 +223,20 @@ int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *l
 						String line_id = arrival["lineId"] | "";
 						if (String(line_id_filter) == line_id) continue;
 					}
-					//display arrival
+					//read arrival
 					struct tm expected_arrival_tm = {0};
 					strptime(arrival["expectedArrival"] | "","%FT%TZ",& expected_arrival_tm);
 					char expected_arrival[25] = "";
 					strftime(expected_arrival,sizeof(expected_arrival)/sizeof(char),"%H:%M",&expected_arrival_tm);
 					String destination = arrival["destinationName"];
+					//trim destinationName length
+					if (destination.length() >= 23){
+						destination[20] = '.';
+						destination[21] = '.';
+						destination[22] = '.';
+						destination = destination.substring(0,23);
+					}
+					//display
 					inkplate.setCursor(40,130+(35*display_line));
 					inkplate.print(destination);
 					inkplate.setCursor(475,130+(35*display_line));
