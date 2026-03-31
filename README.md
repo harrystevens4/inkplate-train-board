@@ -14,3 +14,4 @@ The current station being displayed can be changed by pressing the wake button o
 # Modification
 
 Feel free to change it yourself to suit your needs. My c++ is pretty grim so if you can make it better I'm happy to accept pull requests. If you want to use different stations, you can find their CRS code [here](https://www.nationalrail.co.uk/stations/) (its the 3 letter code next to the station's name).
+For TFL arrivals, if you want buses, you have to use the `naptanId` for that stop, which can be found using [this](https://api-portal.tfl.gov.uk/api-details#api=Line&operation=Line_ArrivalsByPathIds) and searching to find your stop name. You may also need multiple stops if you want arrivals going in both directions.
