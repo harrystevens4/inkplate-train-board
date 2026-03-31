@@ -10,6 +10,7 @@
 int display_national_rail_departures(const char *crs_code, const char *title);
 int wifi_connect();
 int display_selection_menu(const char **options, size_t option_count);
+void display_title(const char *title);
 
 Inkplate inkplate(INKPLATE_1BIT);
 
@@ -27,50 +28,74 @@ void setup() {
 }
 
 void loop() { 
-	//====== display menus ======
-	static int selected_menu = 0;
+	//====== initialisation ======
+	static char *titles[] = {
+		"Catford Bridge",
+		"Catford",
+		"Hnr Oak Park",
+		"284 Arrivals"
+	};
+	static int selected_menu = -1;
+	if (selected_menu < 0){
+		//only runs the first time loop is called (otherwise there would be no title)
+		selected_menu = 0;
+		display_title(titles[selected_menu]);
+	}
+	//====== display corresponding menu ======
 	switch (selected_menu){
 	case 0:
-		display_national_rail_departures("CFB","Caftord Bridge Dept.");
+		display_national_rail_departures("CFB");
 		break;
 	case 1:
-		display_national_rail_departures("CTF","Catford Dept.");
+		display_national_rail_departures("CTF");
 		break;
 	case 2:
-		display_national_rail_departures("HPA","Hnr Oak Park Dept.");
+		display_national_rail_departures("HPA");
 		break;
 	case 3:
 		//ravensbourne park crescent and bourneville road (same stop in opposite directions)
 		const char *stops[] = {"490011434Z","490000365Z"};
 		size_t stop_count = sizeof(stops)/sizeof(const char *);
-		display_tfl_arrivals(stops,stop_count,"284 Arrivals");
+		display_tfl_arrivals(stops,stop_count);
 		break;
 	}
 	//====== wait for user input ======
 	const time_t time_between_updates_ms = 60000;
+	const time_t wait_time = 50; //user input poll interval (ms)
 	time_t time_waited_ms = 0;
+	int title_rendered = 0;
 	while (time_waited_ms < time_between_updates_ms){
-		delay(50);
-		time_waited_ms += 100;
+		delay(wait_time);
+		time_waited_ms += wait_time;
 		uint16_t x[2], y[2];
 		if (inkplate.tsGetData(x,y) > 0){
 			selected_menu = (selected_menu+1) % 4;
-			break;
+			display_title(titles[selected_menu]);
+			//give user grace time to keep navigating to a new menu
+			time_waited_ms = time_between_updates_ms - 500; //0.5s
+			title_rendered = 1;
 		}
 	}
+	//====== render the title ======
+	Serial.println("displaying title...");
+	//if user has scrolled through menus no need to redisplay the title
+	if (!title_rendered) display_title(titles[selected_menu]);
 }
 
-int display_national_rail_departures(const char *crs_code, const char *title){
+void display_title(const char *title){
 	//====== display header ======
 	inkplate.clearDisplay();
 	inkplate.setTextColor(BLACK);
 	inkplate.setCursor(50,50);
 	inkplate.setTextSize(4);
-	inkplate.print(String(title));
+	inkplate.print(title);
 	inkplate.fillRect(50,90,500,10,BLACK);
 	inkplate.display();
+}
+
+int display_national_rail_departures(const char *crs_code){
 	//====== fetch train times ======
-	Serial.println("requesting departures from "+String(title)+"...");
+	Serial.println("requesting departures from "+String(crs_code)+"...");
 	HTTPClient http;
 	if (http.begin("https://api1.raildata.org.uk/1010-live-departure-board-dep1_2/LDBWS/api/20220120/GetDepartureBoard/"+String(crs_code))){
 		http.addHeader("x-apikey",LDBWS_DEPARTURES_KEY);
@@ -157,15 +182,7 @@ int display_selection_menu(const char **options, size_t option_count){
 	}
 }
 
-int display_tfl_arrivals(const char **stop_ids, size_t stop_count, const char *title){
-	//====== display header ======
-	inkplate.clearDisplay();
-	inkplate.setTextColor(BLACK);
-	inkplate.setCursor(50,50);
-	inkplate.setTextSize(4);
-	inkplate.print(String(title));
-	inkplate.fillRect(50,90,500,10,BLACK);
-	inkplate.display();
+int display_tfl_arrivals(const char **stop_ids, size_t stop_count){
 	//====== for each stop point fetch the stops ======
 	HTTPClient http;
 	int display_line = 0;
