@@ -39,7 +39,8 @@ void loop() {
 		"Catford",
 		"Hnr Oak Park",
 		"284 Arrivals",
-		"185 arrivals"
+		"185 arrivals",
+		"Blackfriars",
 	};
 	static int selected_menu = -1;
 	if (selected_menu < 0){
@@ -70,6 +71,9 @@ void loop() {
 	case 4:
 		//multiple busses come here but we only care about 185
 		display_tfl_arrivals(stops_185,stop_count_185,"185");
+		break;
+	case 5:
+		display_national_rail_departures("BFR");
 		break;
 	}
 	//====== wait for user input ======
@@ -133,6 +137,7 @@ int display_national_rail_departures(const char *crs_code){
 			Serial.println("train times fetched successfully");
 			for (JsonVariant departure : services){
 				String stated_time_of_departure = departure["std"] | "N/A";
+				String estimated_time_of_departure = departure["etd"] | "On time";
 				JsonArray destinations = departure["destination"];
 				//grab the first destination
 				String destination = "No dest";
@@ -142,7 +147,13 @@ int display_national_rail_departures(const char *crs_code){
 				inkplate.setCursor(40,130+(35*i));
 				inkplate.print(destination);
 				inkplate.setCursor(475,130+(35*i));
-				inkplate.print(stated_time_of_departure);
+				//etd is either "On time" or an actual time e.g. "11:16"
+				if (estimated_time_of_departure == "On time"){
+					//use the stated departure time if it is on time
+					inkplate.print(stated_time_of_departure);
+				}else {
+					inkplate.print(estimated_time_of_departure);
+				}
 				i++;
 			}
 			//====== update screen ======
