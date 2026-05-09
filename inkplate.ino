@@ -144,6 +144,13 @@ int display_national_rail_departures(const char *crs_code){
 				if (destinations.size() > 0){
 					destination = destinations[0]["locationName"] | "N/A";
 				}
+				//trim destinationName length
+				if (destination.length() >= 23){
+					destination[20] = '.';
+					destination[21] = '.';
+					destination[22] = '.';
+					destination = destination.substring(0,23);
+				}
 				inkplate.setCursor(40,130+(35*i));
 				inkplate.print(destination);
 				inkplate.setCursor(475,130+(35*i));
@@ -151,6 +158,10 @@ int display_national_rail_departures(const char *crs_code){
 				if (estimated_time_of_departure == "On time"){
 					//use the stated departure time if it is on time
 					inkplate.print(stated_time_of_departure);
+				}else if (estimated_time_of_departure == "Cancelled"){
+					//use stated departure with strikethrough line
+					inkplate.print(stated_time_of_departure);
+					inkplate.fillRect(35,130+(35*i)+10,570-35,3,BLACK);
 				}else {
 					inkplate.print(estimated_time_of_departure);
 				}
